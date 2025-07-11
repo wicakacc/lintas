@@ -1,0 +1,91 @@
+## This file contains a comprehensive set of audit rules for system hardening.
+## First, delete all other rules to prevent conflicts.
+-D
+
+## Increase kernel buffer size to handle high event loads.
+-b 8192
+
+## Set the failure mode to panic (1) or log (0). 1 is for high-security environments.
+## Use 1 for maximum security, or 0 to prevent a system halt on error.
+-f 1
+
+## Make the audit configuration immutable until reboot (highly recommended).
+-e 2
+
+#-----------------------------------------------------------------
+# System Integrity & Permission Changes (perm_mod)
+#-----------------------------------------------------------------
+## Monitor for changes to file permissions and ownership.
+-a always,exit -F arch=b64 -S chmod -S fchmod -S fchmodat -F auid>=1000 -F auid!=-1 -k perm_mod
+-a always,exit -F arch=b32 -S chmod -S fchmod -S fchmodat -F auid>=1000 -F auid!=-1 -k perm_mod
+-a always,exit -F arch=b64 -S chown -S fchown -S fchownat -S lchown -F auid>=1000 -F auid!=-1 -k perm_mod
+-a always,exit -F arch=b32 -S chown -S fchown -S fchownat -S lchown -F auid>=1000 -F auid!=-1 -k perm_mod
+
+## Monitor for changes to extended attributes (often used by malware).
+-a always,exit -F arch=b64 -S setxattr -S lsetxattr -S fsetxattr -S removexattr -S lremovexattr -S fremovexattr -F auid>=1000 -F auid!=-1 -k perm_mod
+-a always,exit -F arch=b32 -S setxattr -S lsetxattr -S fsetxattr -S removexattr -S lremovexattr -S fremovexattr -F auid>=1000 -F auid!=-1 -k perm_mod
+
+#-----------------------------------------------------------------
+# Unauthorized Access Attempts (access)
+#-----------------------------------------------------------------
+## Monitor for failed file access attempts due to permissions.
+-a always,exit -F arch=b64 -S creat -S open -S openat -S truncate -S ftruncate -F exit=-EACCES -F auid>=1000 -F auid!=-1 -k access
+-a always,exit -F arch=b32 -S creat -S open -S openat -S truncate -S ftruncate -F exit=-EACCES -F auid>=1000 -F auid!=-1 -k access
+-a always,exit -F arch=b64 -S creat -S open -S openat -S truncate -S ftruncate -F exit=-EPERM -F auid>=1000 -F auid!=-1 -k access
+-a always,exit -F arch=b32 -S creat -S open -S openat -S truncate -S ftruncate -F exit=-EPERM -F auid>=1000 -F auid!=-1 -k access
+
+#-----------------------------------------------------------------
+# Actions and Log Deletion (log_actions)
+#-----------------------------------------------------------------
+## Monitor for deletion or renaming of files in /var/log and for .bash_history.
+-a always,exit -F arch=b64 -S rmdir -S unlink -S unlinkat -S rename -S renameat -F dir=/var/log/ -k log_actions
+-a always,exit -F arch=b32 -S rmdir -S unlink -S unlinkat -S rename -S renameat -F dir=/var/log/ -k log_actions
+-a always,exit -F arch=b64 -S unlink -S unlinkat -S rename -S renameat -F path=/root/.bash_history -k log_actions
+-a always,exit -F arch=b32 -S unlink -S unlinkat -S rename -S renameat -F path=/root/.bash_history -k log_actions
+
+#-----------------------------------------------------------------
+# Critical System File Monitoring (linux_watch)
+#-----------------------------------------------------------------
+## Monitor for write access or attribute changes to critical configuration files.
+-w /etc/passwd -p wa -k identity
+-w /etc/group -p wa -k identity
+-w /etc/shadow -p wa -k identity
+-w /etc/sudoers -p wa -k sudoers
+-w /etc/sudoers.d/ -p wa -k sudoers
+-w /etc/login.defs -p wa -k linux_watch
+-w /etc/securetty -p wa -k linux_watch
+-w /etc/resolv.conf -p wa -k linux_watch
+-w /etc/hosts -p wa -k system_locale
+-w /etc/sysctl.conf -p wa -k kernel_tuning
+-w /etc/cron.allow -p wa -k scheduling
+-w /etc/cron.deny -p wa -k scheduling
+-w /etc/cron.d/ -p wa -k scheduling
+-w /etc/cron.hourly/ -p wa -k scheduling
+-w /etc/cron.weekly/ -p wa -k scheduling
+-w /etc/cron.monthly/ -p wa -k scheduling
+-w /etc/crontab -p wa -k scheduling
+-w /etc/profile -p wa -k profile_scripts
+-w /etc/profile.d/ -p wa -k profile_scripts
+-w /etc/bashrc -p wa -k profile_scripts
+
+#-----------------------------------------------------------------
+# Kernel Module and System Calls (system_call_watch)
+#-----------------------------------------------------------------
+## Monitor for loading/unloading of kernel modules.
+-w /sbin/insmod -p x -k kernel_modules
+-w /sbin/rmmod -p x -k kernel_modules
+-w /sbin/modprobe -p x -k kernel_modules
+-a always,exit -F arch=b64 -S init_module -S delete_module -k kernel_modules
+
+## Monitor for system reboots.
+-a always,exit -F arch=b64 -S reboot -k system_reboot
+-a always,exit -F arch=b32 -S reboot -k system_reboot
+
+## Monitor mounting of filesystems.
+-a always,exit -F arch=b64 -S mount -F auid>=1000 -F auid!=-1 -k mounts
+-a always,exit -F arch=b32 -S mount -F auid>=1000 -F auid!=-1 -k mounts
+
+## Monitor changes to system time.
+-a always,exit -F arch=b64 -S adjtimex -S settimeofday -k time_change
+-a always,exit -F arch=b32 -S adjtimex -S settimeofday -k time_change
+-w /etc/localtime -p wa -k time_change
